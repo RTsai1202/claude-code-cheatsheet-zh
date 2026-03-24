@@ -1,4 +1,4 @@
-name: 同步原站並更新中文版
+name: 偵測原站更新並通知
 
 on:
   schedule:
@@ -6,168 +6,88 @@ on:
     - cron: '0 0 * * *'
   workflow_dispatch: # 允許手動觸發
 
+permissions:
+  issues: write
+  contents: read
+
 jobs:
-  sync:
+  check:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: 下載原站 HTML
-        run: |
-          curl -s https://cc.storyfox.cz/ -o /tmp/original.html
-          echo "原站下載完成，大小：$(wc -c < /tmp/original.html) bytes"
+        run: curl -s https://cc.storyfox.cz/ -o /tmp/original.html
 
-      - name: 比對版本是否有變動
-        id: check
+      - name: 比對版本並開 Issue 通知
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # 從原站抓取版本號
           NEW_VERSION=$(grep -oP '(?<=Claude Code v)[0-9.]+' /tmp/original.html | head -1)
           OLD_VERSION=$(grep -oP '(?<=Claude Code v)[0-9.]+' index.html | head -1)
-          echo "原站版本：$NEW_VERSION"
-          echo "目前版本：$OLD_VERSION"
-          if [ "$NEW_VERSION" != "$OLD_VERSION" ]; then
-            echo "changed=true" >> $GITHUB_OUTPUT
-            echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-            echo "old_version=$OLD_VERSION" >> $GITHUB_OUTPUT
-          else
-            echo "changed=false" >> $GITHUB_OUTPUT
-            echo "版本相同，不需更新"
+          NEW_DATE=$(grep -oP '(?<=Last updated: )[^<]+' /tmp/original.html | head -1)
+
+          echo "原站版本：$NEW_VERSION（目前：$OLD_VERSION）"
+
+          if [ "$NEW_VERSION" = "$OLD_VERSION" ]; then
+            echo "版本相同，無需更新"
+            exit 0
           fi
 
-      - name: 翻譯並更新（若有變動）
-        if: steps.check.outputs.changed == 'true'
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: |
-          pip install anthropic -q
+          # 擷取新的 changelog 內容
+          CHANGELOG=$(python3 - <<'PYEOF'
+import re, sys
 
-          python3 << 'PYEOF'
-          import anthropic
-          import re
+with open('/tmp/original.html') as f:
+    html = f.read()
 
-          with open('/tmp/original.html', 'r') as f:
-              original = f.read()
+m = re.search(r'<ul class="changelog-list">(.*?)</ul>', html, re.DOTALL)
+if not m:
+    print("（無 changelog）")
+    sys.exit(0)
 
-          with open('index.html', 'r') as f:
-              current_zh = f.read()
+items = re.findall(r'<li>(.*?)</li>', m.group(1), re.DOTALL)
+for item in items:
+    # 移除 HTML 標籤，只保留文字
+    text = re.sub(r'<[^>]+>', '', item).strip()
+    print(f"- {text}")
+PYEOF
+          )
 
-          # 找出原站新版本號與更新日期
-          new_version = re.search(r'Claude Code v([\d.]+)', original)
-          new_date = re.search(r'Last updated: ([^<]+)', original)
+          # 確認是否已有相同版本的 Issue（避免重複開）
+          EXISTING=$(gh issue list --repo $GITHUB_REPOSITORY \
+            --label "sync" --state open \
+            --json title --jq ".[] | select(.title | contains(\"$NEW_VERSION\")) | .title")
 
-          # 找出原站的 changelog 項目
-          changelog_match = re.search(r'<ul class="changelog-list">(.*?)</ul>', original, re.DOTALL)
-          changelog_original = changelog_match.group(1).strip() if changelog_match else ''
+          if [ -n "$EXISTING" ]; then
+            echo "已有此版本的 Issue，跳過"
+            exit 0
+          fi
 
-          # 找出原站所有 desc 文字（新增的行）
-          original_descs = re.findall(r'<span class="desc">(.*?)</span>', original, re.DOTALL)
-          current_descs = re.findall(r'<span class="desc">(.*?)</span>', current_zh, re.DOTALL)
+          # 開新 Issue
+          gh issue create \
+            --repo $GITHUB_REPOSITORY \
+            --title "🔔 原站更新：Claude Code v$NEW_VERSION（原 v$OLD_VERSION）" \
+            --label "sync" \
+            --body "## 原站偵測到版本更新
 
-          # 找出新增的 desc（在原站有但中文版沒有的）
-          new_descs = [d for d in original_descs if d not in current_descs]
+**新版本：** \`v$NEW_VERSION\`
+**舊版本：** \`v$OLD_VERSION\`
+**更新日期：** $NEW_DATE
 
-          if not new_descs and not changelog_original:
-              print("沒有新的描述文字需要翻譯")
-              exit(0)
+### 原站 Changelog
 
-          client = anthropic.Anthropic()
+$CHANGELOG
 
-          # 翻譯 changelog
-          if changelog_original:
-              resp = client.messages.create(
-                  model="claude-haiku-4-5-20251001",
-                  max_tokens=1000,
-                  messages=[{
-                      "role": "user",
-                      "content": f"""將以下 HTML changelog 內容翻譯成繁體中文（台灣用語）。
-  保留所有 HTML 標籤不變，只翻譯文字內容。
-  程式碼（<code> 標籤內）、指令名稱、flag 名稱保持英文。
-  只回傳翻譯後的 HTML，不要任何說明。
+---
 
-  {changelog_original}"""
-                  }]
-              )
-              translated_changelog = resp.content[0].text.strip()
-          else:
-              translated_changelog = None
+### 處理方式
 
-          # 翻譯新的 desc
-          translated_map = {}
-          if new_descs:
-              texts_to_translate = '\n---\n'.join(new_descs)
-              resp = client.messages.create(
-                  model="claude-haiku-4-5-20251001",
-                  max_tokens=2000,
-                  messages=[{
-                      "role": "user",
-                      "content": f"""將以下每段說明文字翻譯成繁體中文（台灣用語）。
-  每段用 --- 分隔。
-  保留 HTML 標籤（如 <span class="badge-new">）不變。
-  只翻譯說明文字，程式碼/指令/旗標名稱保持英文。
-  按原本順序回傳，每段同樣用 --- 分隔，不要額外說明。
+請到 Claude Code 告訴 Claude：
+> 「原站更新了，幫我更新 https://github.com/$GITHUB_REPOSITORY 的中文版」
 
-  {texts_to_translate}"""
-                  }]
-              )
-              translated_parts = resp.content[0].text.strip().split('---')
-              for orig, trans in zip(new_descs, translated_parts):
-                  translated_map[orig.strip()] = trans.strip()
+Claude 會自動比對差異並翻譯更新。
 
-          # 更新中文版 HTML
-          updated = current_zh
-
-          # 更新版本號
-          if new_version:
-              updated = re.sub(
-                  r'Claude Code v[\d.]+',
-                  f'Claude Code v{new_version.group(1)}',
-                  updated
-              )
-
-          # 更新日期（轉換為中文格式）
-          if new_date:
-              date_str = new_date.group(1).strip()
-              # March 23, 2026 → 2026 年 3 月 23 日
-              months = {'January':'1','February':'2','March':'3','April':'4',
-                        'May':'5','June':'6','July':'7','August':'8',
-                        'September':'9','October':'10','November':'11','December':'12'}
-              for eng, num in months.items():
-                  date_str = date_str.replace(eng, num + ' 月')
-              date_str = re.sub(r'(\d+) 月 (\d+), (\d+)', r'\3 年 \1\2 日', date_str)
-              updated = re.sub(
-                  r'最後更新：[^<]+',
-                  f'最後更新：{date_str}',
-                  updated
-              )
-
-          # 更新 changelog
-          if translated_changelog:
-              updated = re.sub(
-                  r'(<ul class="changelog-list">)(.*?)(</ul>)',
-                  lambda m: m.group(1) + translated_changelog + m.group(3),
-                  updated,
-                  flags=re.DOTALL
-              )
-
-          # 更新新增的 desc
-          for orig, trans in translated_map.items():
-              updated = updated.replace(
-                  f'<span class="desc">{orig}</span>',
-                  f'<span class="desc">{trans}</span>'
-              )
-
-          with open('index.html', 'w') as f:
-              f.write(updated)
-
-          print("更新完成！")
-          PYEOF
-
-      - name: Commit 並推送
-        if: steps.check.outputs.changed == 'true'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add index.html
-          git commit -m "chore: 同步原站更新至 v${{ steps.check.outputs.new_version }}（原 v${{ steps.check.outputs.old_version }}）"
-          git push
+- 原站：https://cc.storyfox.cz/
+- 中文版：https://rtsai1202.github.io/claude-code-cheatsheet-zh/"
