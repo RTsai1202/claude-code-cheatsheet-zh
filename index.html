@@ -40,16 +40,16 @@
     }
 
     html {
-      font-size: 12px;
+      font-size: 14px;
     }
 
     body {
       font-family: var(--font-sans);
       font-size: 0.9rem;
       line-height: 1.15;
-      background: #fff;
+      background: #F8FAFC;
       color: #1F2937;
-      padding: 6mm;
+      padding: 10px 20px 16px;
     }
 
     /* === PAGE LAYOUT === */
@@ -60,7 +60,7 @@
 
     .page {
       width: 100%;
-      max-width: 279mm;
+      max-width: 100%;
       margin: 0 auto;
     }
 
@@ -70,14 +70,52 @@
       justify-content: space-between;
       align-items: center;
       margin-bottom: 2mm;
-      padding-bottom: 1mm;
+      padding-bottom: 2mm;
       border-bottom: 1px solid #E5E7EB;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: baseline;
+      gap: 3mm;
+      flex-wrap: wrap;
     }
 
     .header h1 {
       font-size: 1.4rem;
       font-weight: 700;
       color: #111827;
+    }
+
+    .header-links {
+      display: flex;
+      gap: 1.5mm;
+      align-items: center;
+    }
+
+    .header-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 1mm;
+      font-size: 0.7rem;
+      color: #6B7280;
+      text-decoration: none;
+      border: 1px solid #E5E7EB;
+      border-radius: 4px;
+      padding: 1.5px 6px;
+      background: #fff;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+      white-space: nowrap;
+    }
+
+    .header-link:hover {
+      color: #111827;
+      border-color: #9CA3AF;
+      background: #F9FAFB;
+    }
+
+    .header-link svg {
+      flex-shrink: 0;
     }
 
     .header-meta {
@@ -480,7 +518,7 @@
 
     /* === RESPONSIVE === */
     @media screen and (max-width: 1100px) {
-      html { font-size: 10px; }
+      html { font-size: 12px; }
 
       .main-grid {
         grid-template-columns: repeat(2, 1fr);
@@ -495,8 +533,8 @@
     }
 
     @media screen and (max-width: 600px) {
-      html { font-size: 11px; }
-      body { padding: 3mm; }
+      html { font-size: 12px; }
+      body { padding: 8px 12px; }
 
       .header h1 { font-size: 1.2rem; white-space: nowrap; }
       .header { flex-wrap: wrap; gap: 4px; justify-content: space-between; }
@@ -598,7 +636,19 @@
   <div class="page">
     <!-- HEADER -->
     <header class="header">
-      <h1>Claude Code 速查表</h1>
+      <div class="header-left">
+        <h1>Claude Code 速查表</h1>
+        <div class="header-links">
+          <a href="https://cc.storyfox.cz/" target="_blank" class="header-link">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            原站
+          </a>
+          <a href="https://github.com/RTsai1202/claude-code-cheatsheet-zh" target="_blank" class="header-link">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.02 10.02 0 0 0 22 12.017C22 6.484 17.522 2 12 2z"/></svg>
+            GitHub
+          </a>
+        </div>
+      </div>
       <div class="header-right">
         <div class="os-toggle" id="osToggle">
           <button class="os-btn active" data-os="mac" title="Mac 快捷鍵"><svg width="14" height="14" viewBox="0 0 814 1000" fill="currentColor"><path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76.5 0-103.7 40.8-165.9 40.8s-105.6-57.8-155.5-127.4c-58.4-83-106.3-211.5-106.3-334.2 0-196.5 127.8-300.9 253.3-300.9 66.8 0 122.4 43.4 164.1 43.4 39.5 0 101.1-46 176.2-46 28.5 0 130.9 2.6 198.3 99.1zm-169.5-92.8c31.2-37 52.4-88.1 52.4-139.3 0-7.1-.6-14.3-1.9-20.1-50 1.6-109.2 33.3-145 75.1-25.8 29.3-52.4 79.8-52.4 131.6 0 7.8.6 15.6 1.3 18.2 2.6.6 6.4 1.3 10.3 1.3 44.7 0 101.1-30.5 135.3-66.8z"/></svg></button>
